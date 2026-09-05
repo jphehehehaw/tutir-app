@@ -16,7 +16,6 @@ import {
   MAPA_MATERIAS,
 } from '../../data/exercicios';
 
-
 const DISCIPLINAS = [
   'Matemática A',
   'Português',
@@ -97,31 +96,17 @@ export default function ExerciciosScreen() {
     const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     try {
-      const promptText = `Analisa a resolução apresentada na imagem para o exercício de ${currentExercicio.disciplina} -> Tópico: ${currentExercicio.materia} (${currentExercicio.nivel}):
-Enunciado: "${currentExercicio.enunciado}".
-
-Responde EXCLUSIVAMENTE num objeto JSON válido com a seguinte estrutura:
-{
-  "status": "correto" | "parcial" | "incorreto",
-  "mensagem": "Explicação objetiva em português. Se estiver parcialmente correto, indica exatamente o que está certo, onde errou ou o que faltou completar."
-}`;
-
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${GEMINI_API_KEY.trim()}`;
-
-      const response = await fetch(url, {
+      // Comunicação segura com o nosso servidor (Backend)
+      const response = await fetch('/api/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                { text: promptText },
-                { inline_data: { mime_type: 'image/jpeg', data: base64Data } },
-              ],
-            },
-          ],
-          generationConfig: { response_mime_type: 'application/json' },
+          disciplina: currentExercicio.disciplina,
+          materia: currentExercicio.materia,
+          nivel: currentExercicio.nivel,
+          enunciado: currentExercicio.enunciado,
+          base64Data,
         }),
       });
 
@@ -129,17 +114,13 @@ Responde EXCLUSIVAMENTE num objeto JSON válido com a seguinte estrutura:
       const data = await response.json();
 
       if (!response.ok || data.error) {
-        throw new Error(data.error?.message || `Erro HTTP ${response.status}`);
+        throw new Error(data.error || `Erro HTTP ${response.status}`);
       }
 
-      const rawText = data.candidates[0].content.parts[0].text;
-      const conteudo = JSON.parse(rawText);
-
-      const status: 'correto' | 'parcial' | 'incorreto' =
-        conteudo.status || (conteudo.correto ? 'correto' : 'incorreto');
+      const status: 'correto' | 'parcial' | 'incorreto' = data.status;
 
       setStatusResultado(status);
-      setFeedback(conteudo.mensagem);
+      setFeedback(data.mensagem);
 
       // Atribuição de XP proporcional
       if (status === 'correto') {
